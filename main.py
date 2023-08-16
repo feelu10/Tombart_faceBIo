@@ -223,6 +223,7 @@ def detectFace(timeType):
 
     cap.release()
     cv2.destroyAllWindows()
+
 def isValidImageFormat(name):
     image_path = os.path.join('face_images', name + '.jpg')
     return os.path.exists(image_path)
@@ -319,6 +320,14 @@ def timeIn(name):
     else:
         success_label.config(text=f"Already Timed In Today: {baseData}") 
 
+        face_image = cv2.resize(face_image, (300, 300))  # Resize the image
+        image_path = os.path.join('face_images', name + '.jpg')
+        cv2.imwrite(image_path, face_image)  # Save the resized image
+        success(root, type="employee added", msg=f"Employee {name} added successfully.")
+        
+        # Call the timeIn function to record the entry time
+        recordTime(name, "TIME IN")
+
 def timeOut(name):
     global success_label
     global root
@@ -332,7 +341,7 @@ def timeOut(name):
 
     if not checkIfAlreadyExists(name, 'TIME OUT'):
         with open(csv_file_path, 'a') as f:
-            csv_line = f'{name}	{time_value}	{date}	TIME OUT'
+            csv_line = f'{name}	{time_value}	{date}	TIME OUT\n'
             f.write(csv_line)
         
         # Update the success label widget on the UI
@@ -341,6 +350,29 @@ def timeOut(name):
         # Update the success label widget on the UI
         success_label.config(text=f"Already Timed Out Today: {baseData}")
 
+
+        face_image = cv2.resize(face_image, (300, 300))  # Resize the image
+        image_path = os.path.join('face_images', name + '.jpg')
+        cv2.imwrite(image_path, face_image)  # Save the resized image
+        success_label.config(text=f"Time Out Successful: {recordData}")
+        
+        # Call the timeOut function to record the exit time
+        recordTime(name, "TIME OUT")
+
+
+
+def recordTime(name, timeType):
+    now = datetime.now()
+    time_value = now.strftime('%I:%M:%S:%p')
+    date = now.strftime('%d-%B-%Y')
+    recordData = f'{name}, {time_value}, {date}, {timeType}'
+    csv_file_path = 'Attendance.xls'
+
+    with open(csv_file_path, 'a') as f:
+        csv_line = f'{name}	{time_value}	{date}	{timeType}\n'
+        f.write(csv_line)
+
+    success_label.config(text=f"{timeType.capitalize()} Successful: {recordData}")
 
 
 def checkIfAlreadyExists(name, timeType):
