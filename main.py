@@ -5,6 +5,8 @@ import numpy as np
 from datetime import datetime, timedelta
 import time
 import tkinter as tk
+import tkinter as tk
+from tkinter import PhotoImage
 import threading
 import csv
 
@@ -23,8 +25,15 @@ def main():
     mainFrame = tk.Frame(root, padx=10, pady=10)
     mainFrame.place(relx=0.5, rely=0.5, anchor="center")
 
-    label = tk.Label(mainFrame, text="Face Recognition Attendance", font=("Helvetica", 25))
+    image_path = "memo.png"  # Replace with the actual path to your image
+    image = PhotoImage(file=image_path)
+
+    label = tk.Label(mainFrame, image=image, padx=20, pady=50)
     label.pack()
+
+    label = tk.Label(mainFrame, text="Face Recognition Attendance", font=("Helvetica", 25), padx=20, pady=0, fg="cyan")
+    label.pack()
+
 
     # Create a label to display success messages
     global success_label
@@ -40,42 +49,42 @@ def main():
     timeInFrame = tk.Frame(mainFrame, padx=20, pady=20)
     timeInFrame.pack()
 
-    timeInBtn = tk.Button(timeInFrame, text="TIME IN BY FACE BIO", command=lambda: detectFace("time in"), padx=50, pady=10)
+    timeInBtn = tk.Button(timeInFrame, text="TIME IN BY FACE BIO", command=lambda: detectFace("time in", root), padx=50, pady=10)
     timeInBtn.pack()
 
     timeOutFrame = tk.Frame(mainFrame, padx=20, pady=20)
     timeOutFrame.pack()
 
-    timeOutBtn = tk.Button(timeOutFrame, text="TIME OUT BY FACE BIO", command=lambda: detectFace("time out"), padx=50, pady=10)
+    timeOutBtn = tk.Button(timeOutFrame, text="TIME OUT BY FACE BIO", command=lambda: detectFace("time out", root), padx=50, pady=10)
     timeOutBtn.pack()
 
-    csv_file_path = 'Attendance.csv'
-    employee_totals = calculateTotalHours(csv_file_path)
-    for employee, total_hours in employee_totals.items():
-        print(f"Total hours worked by {employee}: {total_hours}")
+    # csv_file_path = 'TotalHours.csv'
+    # employee_totals = calculateTotalHours(csv_file_path)
+    # for employee, total_hours in employee_totals.items():
+    #     print(f"Total hours worked by {employee}: {total_hours}")
 
     root.mainloop()
 
-def calculateTotalHours(csv_file_path):
-    employee_totals = {}
-    with open(csv_file_path, 'r') as f:
-        myDataList = f.readlines()
-        for line in myDataList:
-            entry = line.strip().split(',')
-            if len(entry) >= 4 and entry[3] == 'TIME IN':
-                employee_name = entry[0]
-                time_in = datetime.strptime(entry[1], '%I:%M:%S:%p')
-                for line_out in myDataList:
-                    entry_out = line_out.strip().split(',')
-                    if entry_out[0] == employee_name and entry_out[2] == entry[2] and entry_out[3] == 'TIME OUT':
-                        time_out = datetime.strptime(entry_out[1], '%I:%M:%S:%p')
-                        total_hours = time_out - time_in
-                        if employee_name in employee_totals:
-                            employee_totals[employee_name] += total_hours
-                        else:
-                            employee_totals[employee_name] = total_hours
-                        break
-    return employee_totals
+# def calculateTotalHours(csv_file_path):
+#     employee_totals = {}
+#     with open(csv_file_path, 'r') as f:
+#         myDataList = f.readlines()
+#         for line in myDataList:
+#             entry = line.strip().split(',')
+#             if len(entry) >= 4 and entry[3] == 'TIME IN':
+#                 employee_name = entry[0]
+#                 time_in = datetime.strptime(entry[1], '%I:%M:%S:%p')
+#                 for line_out in myDataList:
+#                     entry_out = line_out.strip().split(',')
+#                     if entry_out[0] == employee_name and entry_out[2] == entry[2] and entry_out[3] == 'TIME OUT':
+#                         time_out = datetime.strptime(entry_out[1], '%I:%M:%S:%p')
+#                         total_hours = time_out - time_in
+#                         if employee_name in employee_totals:
+#                             employee_totals[employee_name] += total_hours
+#                         else:
+#                             employee_totals[employee_name] = total_hours
+#                         break
+#     return employee_totals
 
 
 def showRegistration():
@@ -124,9 +133,8 @@ def success(root, type, msg):
 
 
 
-def detectFace(timeType):
+def detectFace(timeType, root):
     global success_label  # Declare success_label as global
-    global root 
     delay_duration = 5  # seconds
 
     # Capture start time
@@ -159,6 +167,7 @@ def detectFace(timeType):
         return
 
     cam = True
+    no_face_detected = False  # Initialize the flag
     while cam:
         success, img = cap.read()
 
@@ -172,8 +181,19 @@ def detectFace(timeType):
         encoded_faces = face_recognition.face_encodings(imgS, faces_in_frame)
 
         if not encoded_faces:
-            print("No face encodings found.")
-            continue
+            if no_face_detected:
+                success_label.config(text="Please Try Again.")
+            else:
+                success_label.config(text="No Face Detected.", fg="red")
+                no_face_detected = True  # Set flag to True after the first error
+            # Add a delay before clearing the message
+            root.after(2000, lambda: success_label.config(text=""))
+            break
+
+
+        #lateeeeeer
+
+        no_face_detected = False  # Reset the flag if a face is detected
 
         detected = False  # Flag to indicate whether a recognized face was detected
 
@@ -199,18 +219,21 @@ def detectFace(timeType):
                 if current_time - start_time >= delay_duration:
                     cam = False
                     if not isValidImageFormat(name):
-                        print("Image format is not valid:", name)
+                        success_label.config(text=f"No employee was detected, Please try again.", fg="red")
                     else:
                         if timeType == "time out":
                             if not checkIfAlreadyExists(name, 'TIME OUT'):
                                 timeOut(name)
                             else:
-                                print("Already timed out today:", name)
+                                success_label.config(text=f"You are already time-out today {name.upper()}", fg="red")  # Update success_label with success message
+                                # print("Already timed out today:", name)
                         else:
                             if not checkIfAlreadyExists(name, 'TIME IN'):
                                 timeIn(name)
                             else:
-                                print("Already timed in today:", name)
+                                # success_label.config(text=f"You are already time-in {name}")  # Update success_label with success message
+                                success_label.config(text=f"You are already time-in today {name.upper()}", fg="red")
+                                # print("Already timed in today:", name)
                     break
 
         if not detected:  # No recognized face was detected
@@ -223,6 +246,7 @@ def detectFace(timeType):
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 def isValidImageFormat(name):
     image_path = os.path.join('face_images', name + '.jpg')
@@ -292,7 +316,7 @@ def saveImage(name, root):
     # Release the camera and close the window
     cap.release()
     cv2.destroyAllWindows()
-    success(root, type="employee added", msg=f"Employee {name} added successfully.")
+    success_label.config(text=f"Employee {name.upper()} added successfully.", fg="green")
 
 
 def timeIn(name):
@@ -301,10 +325,10 @@ def timeIn(name):
     now = datetime.now()
     time_value = now.strftime('%I:%M:%S:%p')
     date = now.strftime('%d-%B-%Y')
-    recordData = f'{name}, {time_value}, {date}, TIME IN'
+    recordData = f'{name.upper()}, {time_value}, {date}' 
     baseData = f'{name},{date}'
 
-    csv_file_path = 'Attendance.xls'
+    csv_file_path = 'Attendance.csv'
 
     if not checkIfAlreadyExists(name, 'TIME IN'):
         if name.lower() == "carl" or name.lower() == "adrianvyne":
@@ -312,11 +336,19 @@ def timeIn(name):
             adjusted_time = now - timedelta(minutes=15)
             time_value = adjusted_time.strftime('%I:%M:%S:%p')
 
-        with open(csv_file_path, 'a') as f:
-            csv_line = f'{name}	{time_value}	{date}	TIME IN\n'
+        # with open(csv_file_path, 'a') as f:
+        #     # csv_line = f'{name}	{time_value}	{date}	TIME IN\n'
+        #     csv_line = f'{name},{time_value},{date},TIME IN\n'
+        #     f.write(csv_line)
+        attendance_folder = "attendance"
+        os.makedirs(attendance_folder, exist_ok=True)  # Create the folder if it doesn't exist
+        employee_csv_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
+
+        with open(employee_csv_path, 'a') as f:
+            csv_line = f'{name},{time_value},{date},TIME IN\n'
             f.write(csv_line)
 
-        success_label.config(text=f"Time In Successful: {recordData}")  # Update success_label with success message
+        success_label.config(text=f"Time In Successful: {recordData}", fg="green")  # Update success_label with success message
     else:
         success_label.config(text=f"Already Timed In Today: {baseData}") 
 
@@ -334,30 +366,36 @@ def timeOut(name):
     now = datetime.now()
     time_value = now.strftime('%I:%M:%S:%p')
     date = now.strftime('%d-%B-%Y')
-    recordData = f'{name}, {time_value}, {date}, TIME OUT'
-    baseData = f'{name},{date}'
+    recordData = f'{name.upper()}, {time_value}, {date}' 
+    baseData = f'{name.upper()},{date}'
 
-    csv_file_path = 'Attendance.xls'
+    csv_file_path = 'Attendance.csv'
 
     if not checkIfAlreadyExists(name, 'TIME OUT'):
-        with open(csv_file_path, 'a') as f:
-            csv_line = f'{name}	{time_value}	{date}	TIME OUT\n'
-            f.write(csv_line)
-        
-        # Update the success label widget on the UI
-        success_label.config(text=f"Time Out Successful: {recordData}")
-    else:
-        # Update the success label widget on the UI
-        success_label.config(text=f"Already Timed Out Today: {baseData}")
+        # with open(csv_file_path, 'a') as f:
+        #     # csv_line = f'{name}	{time_value}	{date}	TIME IN\n'
+        #     csv_line = f'{name},{time_value},{date},TIME IN\n'
+        #     f.write(csv_line)
+        attendance_folder = "attendance"
+        os.makedirs(attendance_folder, exist_ok=True)  # Create the folder if it doesn't exist
+        employee_csv_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
 
+        with open(employee_csv_path, 'a') as f:
+            csv_line = f'{name},{time_value},{date},TIME OUT\n'
+            f.write(csv_line)
+
+        success_label.config(text=f"Time OUT Successful: {recordData}", pady=20, fg="green")  # Update success_label with success message
+    else:
+        success_label.config(text=f"You are already timed-out today: {baseData}") 
 
         face_image = cv2.resize(face_image, (300, 300))  # Resize the image
         image_path = os.path.join('face_images', name + '.jpg')
         cv2.imwrite(image_path, face_image)  # Save the resized image
-        success_label.config(text=f"Time Out Successful: {recordData}")
+        success(root, type="employee added", msg=f"Employee {name} added successfully.")
         
-        # Call the timeOut function to record the exit time
+        # Call the timeIn function to record the entry time
         recordTime(name, "TIME OUT")
+    
 
 
 
@@ -366,10 +404,12 @@ def recordTime(name, timeType):
     time_value = now.strftime('%I:%M:%S:%p')
     date = now.strftime('%d-%B-%Y')
     recordData = f'{name}, {time_value}, {date}, {timeType}'
-    csv_file_path = 'Attendance.xls'
+    attendance_folder = "attendance"
+    os.makedirs(attendance_folder, exist_ok=True)  # Create the folder if it doesn't exist
+    csv_file_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
 
     with open(csv_file_path, 'a') as f:
-        csv_line = f'{name}	{time_value}	{date}	{timeType}\n'
+        csv_line = f'{name},{time_value},{date},{timeType}\n'
         f.write(csv_line)
 
     success_label.config(text=f"{timeType.capitalize()} Successful: {recordData}")
@@ -378,17 +418,19 @@ def recordTime(name, timeType):
 def checkIfAlreadyExists(name, timeType):
     now = datetime.now()
     date = now.strftime('%d-%B-%Y')
-    baseData = f'{name}	{date}	{timeType}'
-    
-    csv_file_path = 'Attendance.xls'
+    baseData = f'{name},{date},{timeType}'
+    attendance_folder = "attendance"
+    csv_file_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
 
-    with open(csv_file_path, 'r') as f:
-        myDataList = f.readlines()
-        for line in myDataList:
-            entry = line.strip().split(',')
-            if len(entry) >= 4 and entry[0] == name and entry[2] == date and entry[3] == timeType:
-                return True
+    if os.path.exists(csv_file_path):
+        with open(csv_file_path, 'r') as f:
+            myDataList = f.readlines()
+            for line in myDataList:
+                entry = line.strip().split(',')
+                if len(entry) >= 4 and entry[3] == timeType:
+                    return True
     return False
+
 
 
 if __name__ == "__main__":
