@@ -5,13 +5,18 @@ import numpy as np
 from datetime import datetime, timedelta
 import time
 import tkinter as tk
-import tkinter as tk
 from tkinter import PhotoImage
+from PIL import Image, ImageTk
 import threading
 import csv
 
 def main():
     root = tk.Tk()
+
+    image_path = "memoDmg.png"  # Path to the converted GIF image
+    img = Image.open(image_path)
+    img = ImageTk.PhotoImage(img)
+    root.tk.call('wm', 'iconphoto', root._w, img)
 
     window_width = 1000
     window_height = 1000
@@ -63,29 +68,77 @@ def main():
     # for employee, total_hours in employee_totals.items():
     #     print(f"Total hours worked by {employee}: {total_hours}")
 
+    attendance_folder = "attendance"
+    total_hours_folder = "totalhoursfolder"
+    os.makedirs(total_hours_folder, exist_ok=True)
+
+    # Calculate total hours
+    employee_totals = calculateTotalHours(attendance_folder)
+
+    # Write total hours to CSV
+    total_hours_csv_name = "TotalHours.csv"
+    total_hours_csv_path = os.path.join(total_hours_folder, total_hours_csv_name)
+    writeTotalHoursToCSV(employee_totals, total_hours_csv_path)
+
     root.mainloop()
 
-# def calculateTotalHours(csv_file_path):
-#     employee_totals = {}
-#     with open(csv_file_path, 'r') as f:
-#         myDataList = f.readlines()
-#         for line in myDataList:
-#             entry = line.strip().split(',')
-#             if len(entry) >= 4 and entry[3] == 'TIME IN':
-#                 employee_name = entry[0]
-#                 time_in = datetime.strptime(entry[1], '%I:%M:%S:%p')
-#                 for line_out in myDataList:
-#                     entry_out = line_out.strip().split(',')
-#                     if entry_out[0] == employee_name and entry_out[2] == entry[2] and entry_out[3] == 'TIME OUT':
-#                         time_out = datetime.strptime(entry_out[1], '%I:%M:%S:%p')
-#                         total_hours = time_out - time_in
-#                         if employee_name in employee_totals:
-#                             employee_totals[employee_name] += total_hours
-#                         else:
-#                             employee_totals[employee_name] = total_hours
-#                         break
-#     return employee_totals
 
+# Calculate total hours for each employee
+def calculateTotalHours(attendance_folder):
+    employee_totals = {}
+
+    # Loop through the attendance CSV files
+    for csv_file in os.listdir(attendance_folder):
+        if csv_file.endswith("_attendance.csv"):
+            csv_file_path = os.path.join(attendance_folder, csv_file)
+            with open(csv_file_path, 'r') as f:
+                myDataList = f.readlines()
+                employee_entries = {}  # Store entries for each employee
+                for line in myDataList:
+                    entry = line.strip().split(',')
+                    if len(entry) >= 4:
+                        employee_name = entry[0]
+                        date = entry[2]
+                        time_type = entry[3]
+                        time = entry[1]
+                        if employee_name not in employee_entries:
+                            employee_entries[employee_name] = []
+                        employee_entries[employee_name].append((date, time_type, time))
+                        
+                for employee_name, entries in employee_entries.items():
+                    total_hours = calculateEmployeeTotalHours(entries)
+                    if employee_name not in employee_totals:
+                        employee_totals[employee_name] = 0.0
+                    employee_totals[employee_name] += total_hours
+
+    return employee_totals
+
+# Calculate total hours worked for an employee's entries
+def calculateEmployeeTotalHours(entries):
+    total_hours = 0.0
+    time_in = None
+    for entry in entries:
+        date, time_type, time = entry
+        if time_type == 'TIME IN':
+            time_in = time
+        elif time_type == 'TIME OUT' and time_in:
+            total_hours += calculateHoursWorked(time_in, time)
+            time_in = None
+    return total_hours
+
+# Calculate the hours worked between TIME IN and TIME OUT
+def calculateHoursWorked(time_in_str, time_out_str):
+    time_in = datetime.strptime(time_in_str, '%I:%M:%S:%p')
+    time_out = datetime.strptime(time_out_str, '%I:%M:%S:%p')
+    hours_worked = (time_out - time_in).total_seconds() / 3600
+    return hours_worked
+
+# Write employee total hours to "TotalHours.csv"
+def writeTotalHoursToCSV(employee_totals, total_hours_csv_path):
+    with open(total_hours_csv_path, 'w') as f:
+        f.write("Employee Name,Total Hours\n")
+        for employee, total_hours in employee_totals.items():
+            f.write(f"{employee},{total_hours:.2f}\n")
 
 def showRegistration():
     root = tk.Tk()
@@ -331,15 +384,9 @@ def timeIn(name):
     csv_file_path = 'Attendance.csv'
 
     if not checkIfAlreadyExists(name, 'TIME IN'):
-        if name.lower() == "carl" or name.lower() == "adrianvyne":
-            # Subtract 15 minutes for specific users
+        if name.lower() == "carl james" or name.lower() == "adrian vyne":
             adjusted_time = now - timedelta(minutes=15)
             time_value = adjusted_time.strftime('%I:%M:%S:%p')
-
-        # with open(csv_file_path, 'a') as f:
-        #     # csv_line = f'{name}	{time_value}	{date}	TIME IN\n'
-        #     csv_line = f'{name},{time_value},{date},TIME IN\n'
-        #     f.write(csv_line)
         attendance_folder = "attendance"
         os.makedirs(attendance_folder, exist_ok=True)  # Create the folder if it doesn't exist
         employee_csv_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
@@ -403,16 +450,21 @@ def recordTime(name, timeType):
     now = datetime.now()
     time_value = now.strftime('%I:%M:%S:%p')
     date = now.strftime('%d-%B-%Y')
-    recordData = f'{name}, {time_value}, {date}, {timeType}'
+    recordData = f'{name.upper()}, {time_value}, {date}'
     attendance_folder = "attendance"
-    os.makedirs(attendance_folder, exist_ok=True)  # Create the folder if it doesn't exist
-    csv_file_path = os.path.join(attendance_folder, f"{name}_attendance.csv")
+    os.makedirs(attendance_folder, exist_ok=True)
 
-    with open(csv_file_path, 'a') as f:
-        csv_line = f'{name},{time_value},{date},{timeType}\n'
+    # Construct the CSV file name based on the month and year
+    month_year = now.strftime('%B-%Y')
+    csv_file_name = os.path.join(attendance_folder, f"{month_year}_attendance.csv")
+
+    # Write attendance record to the CSV file
+    with open(csv_file_name, 'a') as f:
+        csv_line = f'{name},{date},{time_value},{timeType}\n'
         f.write(csv_line)
 
     success_label.config(text=f"{timeType.capitalize()} Successful: {recordData}")
+
 
 
 def checkIfAlreadyExists(name, timeType):
@@ -427,10 +479,9 @@ def checkIfAlreadyExists(name, timeType):
             myDataList = f.readlines()
             for line in myDataList:
                 entry = line.strip().split(',')
-                if len(entry) >= 4 and entry[3] == timeType:
+                if len(entry) >= 4 and entry[2] == date and entry[3] == timeType:
                     return True
     return False
-
 
 
 if __name__ == "__main__":
